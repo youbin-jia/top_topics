@@ -9,6 +9,7 @@ import logging
 from .models import DataSource, RawContent, CrawlLog
 from .crawlers.news_crawler import NewsCrawler
 from .crawlers.rss_crawler import RSSCrawler
+from .crawlers.social_feed_crawler import SocialFeedCrawler
 
 logger = logging.getLogger(__name__)
 
@@ -172,31 +173,15 @@ def process_raw_content_task(content_id: int):
         raise
 
 
-@shared_task
-def daily_crawl_all_sources():
-    """
-    每日定时爬取所有活跃数据源
-    """
-    active_sources = DataSource.objects.filter(status='active')
-
-    results = []
-    for source in active_sources:
-        # 异步执行爬取任务
-        result = crawl_source_task.delay(source.id)
-        results.append({
-            'source_id': source.id,
-            'task_id': result.id
-        })
-
-    logger.info(f"已启动 {len(results)} 个爬取任务")
-    return results
-
-
 def get_crawler_class(source_type: str):
     """获取爬虫类"""
     crawlers = {
         'rss': RSSCrawler,
         'news': NewsCrawler,
+        'wechat': SocialFeedCrawler,
+        'bilibili': SocialFeedCrawler,
+        'xiaohongshu': SocialFeedCrawler,
+        'douyin': SocialFeedCrawler,
     }
     return crawlers.get(source_type, NewsCrawler)
 

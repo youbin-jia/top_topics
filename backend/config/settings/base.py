@@ -255,8 +255,45 @@ APPEND_SLASH = False
 KIMI_BASE_URL = os.environ.get('KIMI_BASE_URL', '')
 KIMI_API_KEY = os.environ.get('KIMI_API_KEY', '')
 KIMI_MODEL = os.environ.get('KIMI_MODEL', 'kimi-k2.5')
+KIMI_ENABLED = os.environ.get('KIMI_ENABLED', 'true').lower() in ('1', 'true', 'yes', 'on')
 KIMI_TIMEOUT = int(os.environ.get('KIMI_TIMEOUT', 20))
 KIMI_MAX_RETRIES = int(os.environ.get('KIMI_MAX_RETRIES', 2))
+KIMI_FAIL_FAST_ON_TIMEOUT = os.environ.get('KIMI_FAIL_FAST_ON_TIMEOUT', 'true').lower() in ('1', 'true', 'yes', 'on')
+KIMI_CIRCUIT_COOLDOWN_SEC = int(os.environ.get('KIMI_CIRCUIT_COOLDOWN_SEC', 600))
+
+# RSSHub 镜像容灾（逗号分隔）
+RSSHUB_MIRRORS = [
+    x.strip() for x in os.environ.get(
+        'RSSHUB_MIRRORS',
+        'https://rsshub.app,https://rsshub.rssforever.com,https://rsshub.feeded.xyz'
+    ).split(',') if x.strip()
+]
+
+# 社媒平台开关（逗号分隔，可选: wechat,bilibili,xiaohongshu,douyin）
+ENABLED_SOCIAL_SOURCES = [
+    x.strip().lower() for x in os.environ.get(
+        'ENABLED_SOCIAL_SOURCES',
+        'wechat,bilibili,xiaohongshu,douyin'
+    ).split(',') if x.strip()
+]
+
+# 公众号搜狗兜底关键词（逗号分隔）
+WECHAT_SOGOU_KEYWORDS = [
+    x.strip() for x in os.environ.get(
+        'WECHAT_SOGOU_KEYWORDS',
+        '科技,AI,互联网,创业,数码'
+    ).split(',') if x.strip()
+]
+WECHAT_SOGOU_MAX_PER_KEYWORD = int(os.environ.get('WECHAT_SOGOU_MAX_PER_KEYWORD', 6))
+
+# 话题去同质化配置
+TOPIC_SOURCE_PENALTY = float(os.environ.get('TOPIC_SOURCE_PENALTY', '0.35'))
+TOPIC_MAIN_KEYWORD_BLACKLIST = [
+    x.strip() for x in os.environ.get(
+        'TOPIC_MAIN_KEYWORD_BLACKLIST',
+        '全文,查看,推荐,视频,文章,内容,我们,你们,他们,这个,那个,以及,相关,今日,热点,更多,最新,如何,为什么,官方,发布,公告'
+    ).split(',') if x.strip()
+]
 
 # 文件上传设置
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB

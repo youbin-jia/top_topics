@@ -17,6 +17,8 @@ class DataSource(models.Model):
         ('zhihu', '知乎'),
         ('wechat', '微信公众号'),
         ('bilibili', 'B站'),
+        ('xiaohongshu', '小红书'),
+        ('douyin', '抖音'),
         ('twitter', 'Twitter'),
         ('other', '其他'),
     ]
