@@ -38,6 +38,7 @@ spacy==3.7.2
 # 爬虫
 requests==2.31.0
 beautifulsoup4==4.12.2
+feedparser==6.0.10
 scrapy==2.11.0
 selenium==4.16.0
 

@@ -55,6 +55,20 @@ docker-compose up -d
 # API文档: http://localhost:8000/swagger/
 ```
 
+**基于真实新闻/网络数据的推荐**  
+推荐内容来自 RSS 等数据源，需先跑一次「真实数据流水线」拉取并分析数据：
+
+```bash
+# Docker 环境下
+docker exec -it top_topics_backend python manage.py run_realdata_pipeline
+
+# 本机直接运行 Django 时
+python backend/manage.py run_realdata_pipeline
+```
+
+流程：拉取默认 RSS 源（Solidot、阮一峰博客、少数派等）→ 清洗正文、提取关键词 → 发现话题 → 更新热度。完成后刷新前端即可看到基于实时数据的推荐。  
+可选参数：`--no-crawl` 仅处理已有内容；`--threshold=2` 降低发现话题的频次阈值；在 Django 后台「数据源」中可增删 RSS 地址。
+
 **Docker 拉取超时（`dial tcp ... 443: i/o timeout`）**  
 若从 Docker Hub 拉取镜像超时，可配置国内镜像加速后再执行 `docker-compose up -d`：
 

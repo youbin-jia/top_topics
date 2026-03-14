@@ -8,6 +8,7 @@ import logging
 
 from .models import DataSource, RawContent, CrawlLog
 from .crawlers.news_crawler import NewsCrawler
+from .crawlers.rss_crawler import RSSCrawler
 
 logger = logging.getLogger(__name__)
 
@@ -194,10 +195,8 @@ def daily_crawl_all_sources():
 def get_crawler_class(source_type: str):
     """获取爬虫类"""
     crawlers = {
+        'rss': RSSCrawler,
         'news': NewsCrawler,
-        # 可以添加更多爬虫类型
-        # 'weibo': WeiboCrawler,
-        # 'zhihu': ZhihuCrawler,
     }
     return crawlers.get(source_type, NewsCrawler)
 

@@ -11,9 +11,10 @@ class DataSource(models.Model):
     """数据源"""
 
     SOURCE_TYPES = [
+        ('rss', 'RSS/Atom 订阅'),
+        ('news', '新闻网站'),
         ('weibo', '微博'),
         ('zhihu', '知乎'),
-        ('news', '新闻网站'),
         ('wechat', '微信公众号'),
         ('bilibili', 'B站'),
         ('twitter', 'Twitter'),

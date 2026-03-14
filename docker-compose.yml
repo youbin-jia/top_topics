@@ -83,6 +83,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - MONGO_URI=mongodb://admin:${MONGO_PASSWORD:-admin123}@mongo:27017/top_topics?authSource=admin
       - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - LOG_FILE_PATH=/app/logs/app.log
     depends_on:
       db:
         condition: service_healthy
@@ -107,6 +108,7 @@ services:
     environment:
       - DB_HOST=db
       - REDIS_URL=redis://redis:6379/0
+      - LOG_FILE_PATH=/app/logs/app.log
     depends_on:
       - db
       - redis
@@ -124,6 +126,8 @@ services:
       - ./backend:/app
     env_file:
       - .env
+    environment:
+      - LOG_FILE_PATH=/app/logs/app.log
     depends_on:
       - celery_worker
     networks:

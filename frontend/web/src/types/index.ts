@@ -14,6 +14,12 @@ export interface Topic {
   recommendation_score?: number;
 }
 
+/** 话题详情（含参考原文链接与短视频选题概要） */
+export interface TopicDetail extends Topic {
+  title_summary?: string;
+  reference_links?: { title: string; url: string; open_url?: string }[];
+}
+
 export interface Recommendation {
   id: number;
   topic: Topic;

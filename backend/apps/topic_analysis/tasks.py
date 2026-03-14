@@ -5,11 +5,64 @@ from celery import shared_task
 from django.utils import timezone
 from datetime import timedelta
 import logging
+import re
 
 from .models import Topic, TopicTrend, ContentTopicRelation
 from apps.data_collection.models import RawContent
+from .llm import generate_topic_title_summary
 
 logger = logging.getLogger(__name__)
+
+
+def _build_source_items(contents, max_items=5):
+    """将关联内容整理成 LLM 输入所需的最小字段。"""
+    items = []
+    for c in contents[:max_items]:
+        items.append(
+            {
+                "title": (c.title or "")[:200],
+                "summary": (c.summary or c.content or "")[:500],
+                "url": c.url,
+            }
+        )
+    return items
+
+
+def _normalize_topic_title(title: str, fallback_keyword: str) -> str:
+    """清洗并规范标题，避免空标题/异常字符。"""
+    cleaned = re.sub(r"\s+", " ", (title or "")).strip().strip("“”\"'")
+    cleaned = re.sub(r"[\\r\\n\\t]+", " ", cleaned).strip()
+    if len(cleaned) > 80:
+        cleaned = cleaned[:80]
+    if len(cleaned) < 8:
+        cleaned = f"{fallback_keyword}：最新进展与核心看点"
+    return cleaned
+
+
+def _build_topic_keywords(main_keyword: str, contents, max_items=12):
+    """聚合关键词，保留检索能力。"""
+    merged = [main_keyword]
+    for c in contents:
+        for kw in (c.keywords or []):
+            kw = str(kw).strip()
+            if kw and kw not in merged:
+                merged.append(kw)
+            if len(merged) >= max_items:
+                return merged
+    return merged[:max_items]
+
+
+def _ensure_unique_topic_title(title: str) -> str:
+    """标题去重，避免 unique 冲突。"""
+    if not Topic.objects.filter(name=title).exists():
+        return title
+    base = title
+    idx = 2
+    while True:
+        candidate = f"{base} #{idx}"
+        if not Topic.objects.filter(name=candidate).exists():
+            return candidate
+        idx += 1
 
 
 @shared_task
@@ -120,15 +173,17 @@ def record_topic_trends():
 
 
 @shared_task
-def discover_new_topics():
+def discover_new_topics(threshold=None, hours=None):
     """
-    发现新话题
+    发现新话题：从已处理内容中聚合关键词，创建话题。
+    threshold: 关键词出现次数阈值，默认 1（数据少时也能发现话题）；数据多时可传 2 或 5。
+    hours: 只统计最近 N 小时的内容，默认 24；传 None 表示不限制时间。
     """
-    # 获取最近24小时的未处理内容
-    recent_contents = RawContent.objects.filter(
-        status='processed',
-        crawled_at__gte=timezone.now() - timedelta(hours=24)
-    ).exclude(keywords=[])
+    threshold = threshold if threshold is not None else 1
+    qs = RawContent.objects.filter(status='processed').exclude(keywords=[])
+    if hours is not None:
+        qs = qs.filter(crawled_at__gte=timezone.now() - timedelta(hours=hours))
+    recent_contents = qs
 
     # 聚合关键词
     keyword_freq = {}
@@ -145,30 +200,40 @@ def discover_new_topics():
 
     # 筛选高频关键词
     new_topics = []
-    threshold = 5  # 出现5次以上视为潜在话题
 
     for keyword, freq in keyword_freq.items():
-        if freq >= threshold:
-            # 检查话题是否已存在
-            if not Topic.objects.filter(name=keyword).exists():
-                # 创建新话题
-                topic = Topic.objects.create(
-                    name=keyword,
-                    main_keyword=keyword,
-                    keywords=[keyword],
-                    article_count=freq,
-                    status='active'
-                )
+        if freq < threshold:
+            continue
+        # 已有同主关键词话题则跳过，避免重复创建
+        if Topic.objects.filter(main_keyword=keyword).exists():
+            continue
 
-                # 关联内容
-                for content in keyword_contents[keyword]:
-                    ContentTopicRelation.objects.create(
-                        content=content,
-                        topic=topic,
-                        relevance_score=1.0
-                    )
+        contents = keyword_contents[keyword]
+        source_items = _build_source_items(contents)
+        llm_result = generate_topic_title_summary(keyword, source_items)
+        topic_title = _normalize_topic_title(llm_result.get("title", ""), keyword)
+        topic_title = _ensure_unique_topic_title(topic_title)
+        topic_summary = (llm_result.get("summary", "") or "").strip()[:500]
+        topic_keywords = _build_topic_keywords(keyword, contents)
 
-                new_topics.append(topic.id)
+        topic = Topic.objects.create(
+            name=topic_title,
+            main_keyword=keyword,
+            keywords=topic_keywords,
+            description=topic_summary or None,
+            article_count=freq,
+            status='active'
+        )
+
+        # 关联内容
+        for content in contents:
+            ContentTopicRelation.objects.create(
+                content=content,
+                topic=topic,
+                relevance_score=1.0
+            )
+
+        new_topics.append(topic.id)
 
     logger.info(f"发现新话题: {len(new_topics)}")
 

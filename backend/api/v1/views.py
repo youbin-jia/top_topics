@@ -7,6 +7,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.utils import timezone
 from django.contrib.auth import get_user_model
+from django.shortcuts import redirect
+from urllib.parse import quote, urlparse
 
 User = get_user_model()
 
@@ -14,7 +16,7 @@ User = get_user_model()
 class TopicViewSet(viewsets.ReadOnlyModelViewSet):
     """话题视图集"""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def get_queryset(self):
         from apps.topic_analysis.models import Topic
@@ -41,7 +43,7 @@ class TopicViewSet(viewsets.ReadOnlyModelViewSet):
             {
                 'id': topic.id,
                 'name': topic.name,
-                'description': topic.description,
+                'description': topic.description or '',
                 'keywords': topic.keywords,
                 'heat_score': topic.heat_score,
                 'trend': topic.trend,
@@ -55,6 +57,62 @@ class TopicViewSet(viewsets.ReadOnlyModelViewSet):
             'data': data
         })
 
+    def retrieve(self, request, pk=None):
+        """话题详情：含参考原文链接与概要，便于做短视频选题与溯源；description 为空时从关联内容现场生成"""
+        from apps.topic_analysis.models import ContentTopicRelation
+        topic = self.get_object()
+        relations = ContentTopicRelation.objects.filter(topic=topic).select_related('content').order_by('-relevance_score')
+        contents = [r.content for r in relations]
+        open_link_base = request.build_absolute_uri('/api/v1/topics/open-link/?url=')
+        reference_links = [
+            {
+                'title': rel.content.title or rel.content.url,
+                'url': rel.content.url,
+                'open_url': f"{open_link_base}{quote(rel.content.url or '', safe='')}",
+            }
+            for rel in relations
+        ]
+        description = topic.description or ''
+        if not description.strip() and contents:
+            parts = []
+            for c in contents[:3]:
+                if getattr(c, 'summary', None) and str(c.summary).strip():
+                    parts.append(str(c.summary).strip()[:150])
+                elif getattr(c, 'title', None) and str(c.title).strip():
+                    parts.append(str(c.title).strip())
+            description = '；'.join(parts)[:500] if parts else ''
+        # 用作短视频标题的短句：取概要首句或前 50 字
+        title_summary = description.split('；')[0][:50] if description else topic.name
+        data = {
+            'id': topic.id,
+            'name': topic.name,
+            'title_summary': title_summary,
+            'description': description,
+            'keywords': topic.keywords or [],
+            'heat_score': topic.heat_score,
+            'trend': topic.trend,
+            'article_count': topic.article_count,
+            'view_count': topic.view_count,
+            'reference_links': reference_links,
+        }
+        return Response({'success': True, 'data': data})
+
+    @action(detail=False, methods=['get'], url_path='open-link')
+    def open_link(self, request):
+        """
+        原文链接中转兜底：
+        - 校验协议与域名
+        - 无协议自动补 https://
+        """
+        raw_url = (request.query_params.get('url') or '').strip()
+        if not raw_url:
+            return Response({'success': False, 'message': '缺少 url 参数'}, status=status.HTTP_400_BAD_REQUEST)
+        target = raw_url if raw_url.startswith(('http://', 'https://')) else f'https://{raw_url}'
+        parsed = urlparse(target)
+        if parsed.scheme not in ('http', 'https') or not parsed.netloc:
+            return Response({'success': False, 'message': '无效的目标链接'}, status=status.HTTP_400_BAD_REQUEST)
+        return redirect(target)
+
     @action(detail=False, methods=['get'])
     def hot(self, request):
         """获取热门话题"""
@@ -65,6 +123,7 @@ class TopicViewSet(viewsets.ReadOnlyModelViewSet):
             {
                 'id': topic.id,
                 'name': topic.name,
+                'description': topic.description or '',
                 'heat_score': topic.heat_score,
                 'trend': topic.trend,
                 'article_count': topic.article_count,
@@ -87,6 +146,7 @@ class TopicViewSet(viewsets.ReadOnlyModelViewSet):
             {
                 'id': topic.id,
                 'name': topic.name,
+                'description': topic.description or '',
                 'heat_score': topic.heat_score,
                 'growth_rate': self._get_growth_rate(topic),
             }
@@ -111,87 +171,79 @@ class TopicViewSet(viewsets.ReadOnlyModelViewSet):
         return 0.0
 
 
-class RecommendationViewSet(viewsets.ViewSet):
-    """推荐视图集"""
+def _topic_to_response_item(topic, recommendation_score=None):
+    """话题转 API 返回项（兼容 hot 与 personalized 字段）"""
+    item = {
+        'id': topic.id,
+        'name': topic.name,
+        'description': topic.description or '',
+        'keywords': topic.keywords or [],
+        'heat_score': topic.heat_score,
+        'trend': topic.trend,
+        'article_count': getattr(topic, 'article_count', 0),
+        'view_count': getattr(topic, 'view_count', 0),
+    }
+    if recommendation_score is not None:
+        item['recommendation_score'] = recommendation_score
+    return item
 
-    permission_classes = [IsAuthenticated]
+
+class RecommendationViewSet(viewsets.ViewSet):
+    """推荐视图集：未登录时返回热门话题，登录后个性化推荐"""
+
+    permission_classes = [AllowAny]
 
     @action(detail=False, methods=['get'])
     def personalized(self, request):
-        """个性化推荐"""
-        user = request.user
+        """个性化推荐（未登录时退回热门推荐）"""
         limit = int(request.query_params.get('limit', 20))
-
-        # 生成推荐
-        from apps.recommendation.engine import HybridRecommender
-        recommender = HybridRecommender()
-
-        recommendations = recommender.recommend(
-            user.id,
-            n_recommendations=limit
-        )
-
-        # 获取话题详情
         from apps.topic_analysis.models import Topic
-        topic_ids = [item[0] for item in recommendations]
-        topics = Topic.objects.filter(id__in=topic_ids)
-        topic_map = {topic.id: topic for topic in topics}
 
-        # 构建返回数据
-        data = []
-        for topic_id, score in recommendations:
-            topic = topic_map.get(topic_id)
-            if topic:
-                data.append({
-                    'id': topic.id,
-                    'name': topic.name,
-                    'description': topic.description,
-                    'keywords': topic.keywords,
-                    'heat_score': topic.heat_score,
-                    'trend': topic.trend,
-                    'recommendation_score': score,
-                })
-
-        # 保存推荐记录
-        from apps.recommendation.models import Recommendation
-        for rank, item in enumerate(data, 1):
-            Recommendation.objects.create(
-                user=user,
-                topic_id=item['id'],
-                recommendation_type='personalized',
-                score=item['recommendation_score'],
-                rank=rank
-            )
-
-        return Response({
-            'success': True,
-            'data': data
-        })
+        if request.user.is_authenticated:
+            try:
+                from apps.recommendation.engine import HybridRecommender
+                recommender = HybridRecommender()
+                recommendations = recommender.recommend(
+                    request.user.id,
+                    n_recommendations=limit
+                )
+                topic_ids = [item[0] for item in recommendations]
+                topics = Topic.objects.filter(id__in=topic_ids)
+                topic_map = {topic.id: topic for topic in topics}
+                data = []
+                for topic_id, score in recommendations:
+                    topic = topic_map.get(topic_id)
+                    if topic:
+                        data.append(_topic_to_response_item(topic, recommendation_score=score))
+                if data:
+                    from apps.recommendation.models import Recommendation
+                    for rank, item in enumerate(data, 1):
+                        Recommendation.objects.get_or_create(
+                            user=request.user,
+                            topic_id=item['id'],
+                            recommendation_type='personalized',
+                            defaults={'score': item['recommendation_score'], 'rank': rank}
+                        )
+                    return Response({'success': True, 'data': data})
+            except Exception:
+                pass
+        # 未登录或个性化无结果：返回热门
+        topics = Topic.objects.filter(
+            status__in=['active', 'trending']
+        ).order_by('-heat_score')[:limit]
+        data = [_topic_to_response_item(t) for t in topics]
+        return Response({'success': True, 'data': data})
 
     @action(detail=False, methods=['get'])
     def hot(self, request):
         """热门推荐"""
-        limit = int(request.query_params.get('limit', 10))
-
+        limit = int(request.query_params.get('limit', 20))
         from apps.topic_analysis.models import Topic
         topics = Topic.objects.filter(
             status__in=['active', 'trending']
         ).order_by('-heat_score')[:limit]
-
-        data = [
-            {
-                'id': topic.id,
-                'name': topic.name,
-                'heat_score': topic.heat_score,
-                'trend': topic.trend,
-            }
-            for topic in topics
-        ]
-
-        return Response({
-            'success': True,
-            'data': data
-        })
+        data = [_topic_to_response_item(t) for t in topics]
+        return Response({'success': True, 'data': data})
 
 
 class FeedbackViewSet(viewsets.ViewSet):

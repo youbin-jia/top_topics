@@ -251,6 +251,13 @@ SWAGGER_SETTINGS = {
 # 应用特定配置
 APPEND_SLASH = False
 
+# Kimi(OpenAI兼容)话题标题/概要生成配置
+KIMI_BASE_URL = os.environ.get('KIMI_BASE_URL', '')
+KIMI_API_KEY = os.environ.get('KIMI_API_KEY', '')
+KIMI_MODEL = os.environ.get('KIMI_MODEL', 'kimi-k2.5')
+KIMI_TIMEOUT = int(os.environ.get('KIMI_TIMEOUT', 20))
+KIMI_MAX_RETRIES = int(os.environ.get('KIMI_MAX_RETRIES', 2))
+
 # 文件上传设置
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB

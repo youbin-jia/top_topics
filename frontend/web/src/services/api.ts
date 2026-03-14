@@ -1,11 +1,19 @@
 /**
  * API客户端
+ * 局域网访问时自动使用当前主机 + 8000 端口，无需配置
  */
 import axios from 'axios';
 
-// 创建axios实例
+function getApiBaseURL(): string {
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  if (typeof window !== 'undefined' && window.location?.hostname && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    return `${window.location.protocol}//${window.location.hostname}:8000/api/v1`;
+  }
+  return 'http://localhost:8000/api/v1';
+}
+
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1',
+  baseURL: getApiBaseURL(),
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
@@ -78,6 +86,12 @@ export const topicApi = {
     category?: string;
     min_score?: number;
   }) => apiClient.get('/topics/', { params }),
+
+  // 获取话题详情（含参考原文链接）
+  getDetail: (id: number) => apiClient.get(`/topics/${id}/`),
+
+  // 原文中转兜底链接
+  getOpenLink: (url: string) => `${getApiBaseURL()}/topics/open-link/?url=${encodeURIComponent(url)}`,
 
   // 获取热门话题
   getHotTopics: (limit?: number) =>
