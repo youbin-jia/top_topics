@@ -1,0 +1,13 @@
+{
+  "log-level": "error",
+  "registry-mirrors": [
+    "https://docker.xuanyuan.me",
+    "https://docker.1ms.run"
+  ],
+  "runtimes": {
+    "nvidia": {
+      "args": [],
+      "path": "/snap/docker/3377/usr/bin/nvidia-container-runtime"
+    }
+  }
+}

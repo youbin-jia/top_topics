@@ -1,4 +1,4 @@
-# Python基础镜像
+# Python 基础镜像（国内镜像源）
 FROM python:3.11-slim
 
 # 设置工作目录
@@ -24,6 +24,9 @@ RUN pip install --upgrade pip && \
 
 # 复制项目文件
 COPY backend/ .
+
+# 创建日志目录（Django LOGGING 的 file handler 需要）
+RUN mkdir -p /app/logs
 
 # 收集静态文件
 RUN python manage.py collectstatic --noinput

@@ -1,7 +1,5 @@
-version: '3.8'
-
 services:
-  # MySQL数据库
+  # MySQL数据库（国内镜像源）
   db:
     image: mysql:8.0
     container_name: top_topics_db
@@ -22,7 +20,7 @@ services:
       timeout: 20s
       retries: 10
 
-  # MongoDB
+  # MongoDB（国内镜像源）
   mongo:
     image: mongo:7.0
     container_name: top_topics_mongo
@@ -36,7 +34,7 @@ services:
     networks:
       - backend_network
 
-  # Redis缓存
+  # Redis缓存（国内镜像源）
   redis:
     image: redis:7-alpine
     container_name: top_topics_redis
@@ -59,7 +57,7 @@ services:
     volumes:
       - es_data:/usr/share/elasticsearch/data
     ports:
-      - "9200:9200"
+      - "9201:9200"   # 主机 9201 避免与宿主机已有 9200 冲突
     networks:
       - backend_network
 
@@ -149,7 +147,7 @@ services:
     networks:
       - backend_network
 
-  # Nginx (生产环境)
+  # Nginx（生产环境，国内镜像源）
   nginx:
     image: nginx:alpine
     container_name: top_topics_nginx
@@ -168,7 +166,7 @@ services:
     profiles:
       - production
 
-  # Prometheus监控
+  # Prometheus监控（国内镜像源）
   prometheus:
     image: prom/prometheus:latest
     container_name: top_topics_prometheus
@@ -182,7 +180,7 @@ services:
     profiles:
       - monitoring
 
-  # Grafana可视化
+  # Grafana可视化（国内镜像源）
   grafana:
     image: grafana/grafana:latest
     container_name: top_topics_grafana

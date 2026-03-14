@@ -55,6 +55,31 @@ docker-compose up -d
 # API文档: http://localhost:8000/swagger/
 ```
 
+**Docker 拉取超时（`dial tcp ... 443: i/o timeout`）**  
+若从 Docker Hub 拉取镜像超时，可配置国内镜像加速后再执行 `docker-compose up -d`：
+
+1. **Docker 非 Snap 安装**：编辑或创建 `/etc/docker/daemon.json`：
+
+```json
+{
+  "registry-mirrors": [
+    "https://docker.1ms.run",
+    "https://docker.xuanyuan.me"
+  ]
+}
+```
+
+2. **Docker 通过 Snap 安装**（如 Ubuntu）：编辑 `~/Code/top_topics/docker/daemon.json`（项目内示例），再复制到 Snap 配置目录：
+
+```bash
+# 项目内已提供示例 docker/daemon.json，复制后重启 Docker
+sudo mkdir -p /var/snap/docker/current/config
+sudo cp docker/daemon.json /var/snap/docker/current/config/daemon.json
+sudo snap restart docker
+```
+
+3. 重启 Docker 后再次执行 `docker-compose up -d`。若某镜像地址不可用，可搜索「Docker 镜像加速 2024」更换为当前可用的镜像源。
+
 ### 本地开发
 
 #### 后端设置

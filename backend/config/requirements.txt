@@ -77,3 +77,4 @@ uvicorn==0.25.0
 # 其他
 Pillow==10.2.0
 django-admin-interface==0.28.0
+django-extensions==3.2.3

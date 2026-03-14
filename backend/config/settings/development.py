@@ -34,9 +34,6 @@ INSTALLED_APPS += [
 # 开发环境中间件（添加调试工具）
 MIDDLEWARE.insert(0, 'django.middleware.common.CommonMiddleware')
 
-# 静态文件自动重载
-INSTALLED_APPS += ['django.contrib.staticfiles']
-
 # 开发环境缓存（使用本地内存）
 CACHES = {
     'default': {
